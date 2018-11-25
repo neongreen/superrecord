@@ -47,8 +47,8 @@ module SuperRecord
       -- * Lens interop
     , lens
       -- * Machinery
-    , Rec
-    , RecCopy
+    , Rec(..)
+    , RecCopy(..)
     , RecTyIdxH
     , showRec, RecKeys(..), recKeys
     , RecEq(..)
