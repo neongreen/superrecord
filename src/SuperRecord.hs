@@ -38,7 +38,7 @@ module SuperRecord
       -- * Reflection
     , reflectRec, reflectRecFold, RecApply(..)
       -- * Native type interop
-    , FromNative, fromNative
+    , HasFromNative(..), fromNative
     , ToNative, toNative
       -- * MTL interop
     , asksR, asksRP
@@ -710,13 +710,16 @@ instance
 
 -- | Conversion helper to bring a Haskell type to a record. Note that the
 -- native Haskell type must be an instance of 'Generic'
-class FromNative a lts | a -> lts where
-    fromNative' :: a x -> Rec lts
+class HasFromNative a where
+    type FromNative a :: [*]
+    fromNative' :: a x -> Rec (FromNative a)
 
-instance FromNative cs lts => FromNative (D1 m cs) lts where
+instance HasFromNative cs => HasFromNative (D1 m cs) where
+    type FromNative (D1 m cs) = FromNative cs
     fromNative' (M1 xs) = fromNative' xs
 
-instance FromNative cs lts => FromNative (C1 m cs) lts where
+instance HasFromNative cs => HasFromNative (C1 m cs) where
+    type FromNative (C1 m cs) = FromNative cs
     fromNative' (M1 xs) = fromNative' xs
 
 instance
@@ -725,13 +728,14 @@ instance
     , ToJSVal t
 #endif
     )
-    => FromNative (S1 ('MetaSel ('Just name) p s l) (Rec0 t)) '[name := t]
+    => HasFromNative (S1 ('MetaSel ('Just name) p s l) (Rec0 t))
     where
+    type FromNative (S1 ('MetaSel ('Just name) p s l) (Rec0 t)) = '[name := t]
     fromNative' (M1 (K1 t)) = (FldProxy :: FldProxy name) := t & rnil
 
 instance
-    ( FromNative l lhs
-    , FromNative r rhs
+    ( HasFromNative l, lhs ~ FromNative l
+    , HasFromNative r, rhs ~ FromNative r
     , lts ~ Sort (RecAppend lhs rhs)
     , RecCopy lhs lhs lts
     , RecCopy rhs rhs lts
@@ -739,11 +743,12 @@ instance
     , KnownNat (RecSize rhs)
     , KnownNat (RecSize lhs + RecSize rhs)
     )
-    => FromNative (l :*: r) lts where
+    => HasFromNative (l :*: r) where
+    type FromNative (l :*: r) = Sort (RecAppend (FromNative l) (FromNative r))
     fromNative' (l :*: r) = fromNative' l ++: fromNative' r
 
 -- | Convert a native Haskell type to a record
-fromNative :: (Generic a, FromNative (Rep a) lts) => a -> Rec lts
+fromNative :: (Generic a, HasFromNative (Rep a)) => a -> Rec (FromNative (Rep a))
 fromNative = fromNative' . from
 {-# INLINE fromNative #-}
 
